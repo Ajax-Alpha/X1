@@ -1,0 +1,15 @@
+# UE构建/派生数据
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+.vscode/
+
+# 平台特定文件
+*.pdb
+*.dSYM/
+
+# 用户/操作系统缓存文件
+.DS_Store
+Thumbs.db
