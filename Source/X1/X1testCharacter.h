@@ -16,7 +16,7 @@ class UInputComponent;
 class UAnimBlueprint;
 class UInputMappingContext;
 class UInputAction;
-class UInputComponent;
+
 UCLASS()
 class X1_API AX1testCharacter : public ACharacter
 {
