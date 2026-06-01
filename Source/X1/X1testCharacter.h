@@ -10,12 +10,14 @@
 #include "InputActionValue.h"
 #include "X1testCharacter.generated.h"
 
-class UInputMappingContext;
-class UInputAction;
+class AEquippableToolBase;
+class UItemDefinition;
 class UInputComponent;
 class UAnimBlueprint;
 class UInputMappingContext;
 class UInputAction;
+class UInventoryComponent;
+class UEquippableToolDefinition;
 
 UCLASS()
 class X1_API AX1testCharacter : public ACharacter
@@ -43,6 +45,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly,Category = Input)
 	UInputAction* LookAction;
+
+	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category = Input)
+	TObjectPtr<UInputAction> UseAction;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Tools)
+	TObjectPtr<AEquippableToolBase> EquippedTool;
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -75,4 +83,17 @@ public:
 	// First Person animations
 	UPROPERTY(EditAnywhere, Category = Animation)
 	UAnimBlueprint* FirstPersonDefaultAnim;
+
+	// Inventory Component
+	UPROPERTY(VisibleAnywhere, Category = Inventory)
+	TObjectPtr<UInventoryComponent> InventoryComponent;
+	
+	UFUNCTION()
+	bool IsToolAlreadyOwned(UEquippableToolDefinition* ToolDefinition);
+
+	UFUNCTION()
+	void AttachTool(UEquippableToolDefinition* ToolDefinition);
+
+	UFUNCTION()
+	void GiveItem(UItemDefinition* ItemDefinition);
 };

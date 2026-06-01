@@ -2,6 +2,10 @@
 
 
 #include "X1testCharacter.h"
+#include "InventoryComponent.h"        
+#include "EquippableToolDefinition.h"  
+#include "EquippableToolBase.h"       
+#include "ItemDefinition.h"  
 
 // Sets default values
 AX1testCharacter::AX1testCharacter()
@@ -37,6 +41,8 @@ AX1testCharacter::AX1testCharacter()
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
 	FirstPersonCameraComponent->FirstPersonFieldOfView = FirstPersonFieldOfView;
 	FirstPersonCameraComponent->FirstPersonScale = FirstPersonViewScale;
+	
+	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 }
 
 // Called when the game starts or when spawned
@@ -118,5 +124,88 @@ void AX1testCharacter::Look(const FInputActionValue& Value)
 	{
 		AddControllerYawInput(LookAxisValue.X);
 		AddControllerPitchInput(LookAxisValue.Y);
+	}
+}
+
+bool AX1testCharacter::IsToolAlreadyOwned(UEquippableToolDefinition* ToolDefinition) 
+{
+	for (UEquippableToolDefinition* InventoryItem : InventoryComponent->ToolInventory)
+	{
+		if (ToolDefinition->ID == InventoryItem->ID)
+		{
+			return true;
+		}
+	}
+	
+    return false;
+}
+
+void AX1testCharacter::AttachTool(UEquippableToolDefinition* ToolDefinition)
+{
+	// Only equip this tool if it isn't already owned
+	if (not IsToolAlreadyOwned(ToolDefinition))
+	{
+		AEquippableToolBase* ToolToEquip = GetWorld()->SpawnActor<AEquippableToolBase>(ToolDefinition->ToolAsset, this->GetActorTransform());
+		
+		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+
+		ToolToEquip->AttachToActor(this, AttachmentRules);
+		ToolToEquip->AttachToComponent(FirstPersonMeshComponent, AttachmentRules, FName(TEXT("HandGrip_R")));
+		ToolToEquip->AttachToComponent(GetMesh(), AttachmentRules, FName(TEXT("HandGrip_R")));
+
+		ToolToEquip->OwningCharacter = this;
+
+		// Add the tool to this character's inventory
+		InventoryComponent->ToolInventory.Add(ToolDefinition);
+
+		// Set the animations on the first person mesh.
+		FirstPersonMeshComponent->SetAnimInstanceClass(ToolToEquip->FirstPersonToolAnim->GeneratedClass);
+		GetMesh()->SetAnimInstanceClass(ToolToEquip->ThirdPersonToolAnim->GeneratedClass);
+
+		EquippedTool = ToolToEquip;
+
+		// Get the player controller for this character
+		if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+			{
+				Subsystem->AddMappingContext(ToolToEquip->ToolMappingContext, 1);
+			}
+
+			ToolToEquip->BindInputAction(UseAction);
+		}
+	}
+}
+
+void AX1testCharacter::GiveItem(UItemDefinition* ItemDefinition)
+{
+	// Case based on the type of the item
+	switch (ItemDefinition->ItemType)
+	{
+
+	case EItemType::Tool:
+	{
+		// If the item is a tool, attempt to cast and attach it to the character
+
+		UEquippableToolDefinition* ToolDefinition = Cast<UEquippableToolDefinition>(ItemDefinition);
+
+		if (ToolDefinition != nullptr)
+		{
+			AttachTool(ToolDefinition);
+		}
+		else {
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("Cast to tool failed!"));
+		}
+		break;
+	}
+
+	case EItemType::Consumable:
+	{
+		// Not implemented
+		break;
+	}
+	default:
+		break;
+
 	}
 }

@@ -86,16 +86,11 @@ void APickupBase::InitializePickup()
     // 6. 初始化 ReferenceItem (如果它是用于存储数据的副本)
     if (!ReferenceItem)
     {
-        ReferenceItem = NewObject<UItemDefinition>(this, UItemDefinition::StaticClass());
+        ReferenceItem = TempItemDefinition->CreateItemCopy();
+
     }
 
-    // 复制数据
-    ReferenceItem->ID = ItemDataRow->ID;
-    ReferenceItem->ItemType = ItemDataRow->ItemType;
-    ReferenceItem->ItemText = ItemDataRow->ItemText;
-
-    // 注意：这里直接从 TempItemDefinition 复制 Mesh 引用
-    ReferenceItem->WorldMesh = TempItemDefinition->WorldMesh;
+  
 
     // 7. 处理 Mesh 显示
     UStaticMesh* MeshToUse = nullptr;
@@ -137,10 +132,12 @@ void APickupBase::InitializePickup()
 void APickupBase::OnSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
     GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, TEXT("Attempting a pickup collision"));
-    ACharacter* Character = Cast<ACharacter>(OtherActor);
+    AX1testCharacter* Character = Cast<AX1testCharacter>(OtherActor);
 
     if (Character != nullptr)
     {
+        Character->GiveItem(ReferenceItem);
+
         SphereComponent->OnComponentBeginOverlap.RemoveAll(this);
 
         PickupMeshComponent->SetVisibility(false);
