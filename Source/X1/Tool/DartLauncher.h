@@ -6,6 +6,7 @@
 #include "X1/EquippableToolBase.h"
 #include "DartLauncher.generated.h"
 
+class AFirstPersonProjectile;
 /**
  * 
  */
@@ -16,9 +17,9 @@ class X1_API ADartLauncher : public AEquippableToolBase
 
 public:
 	virtual void Use() override;
-
 	
-	
-
 	virtual void BindInputAction(const UInputAction* InputToBind)override;
+
+	UPROPERTY(EditAnywhere, Category = "Projectile")
+	TSubclassOf<AFirstPersonProjectile> ProjectileClass;
 };

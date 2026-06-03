@@ -51,6 +51,8 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Tools)
 	TObjectPtr<AEquippableToolBase> EquippedTool;
+
+	
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -96,4 +98,7 @@ public:
 
 	UFUNCTION()
 	void GiveItem(UItemDefinition* ItemDefinition);
+
+	UFUNCTION()
+	FVector GetCameraTargetLocation();
 };

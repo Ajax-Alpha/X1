@@ -7,6 +7,8 @@
 #include "EquippableToolBase.h"       
 #include "ItemDefinition.h"  
 
+
+
 // Sets default values
 AX1testCharacter::AX1testCharacter()
 {
@@ -43,6 +45,9 @@ AX1testCharacter::AX1testCharacter()
 	FirstPersonCameraComponent->FirstPersonScale = FirstPersonViewScale;
 	
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
+
+	
+
 }
 
 // Called when the game starts or when spawned
@@ -155,6 +160,9 @@ void AX1testCharacter::AttachTool(UEquippableToolDefinition* ToolDefinition)
 
 		ToolToEquip->OwningCharacter = this;
 
+
+
+
 		// Add the tool to this character's inventory
 		InventoryComponent->ToolInventory.Add(ToolDefinition);
 
@@ -209,3 +217,30 @@ void AX1testCharacter::GiveItem(UItemDefinition* ItemDefinition)
 
 	}
 }
+
+FVector AX1testCharacter::GetCameraTargetLocation()
+{
+	// The target position to return
+	FVector TargetPosition;
+
+	UWorld* const World = GetWorld();
+
+	if (World != nullptr)
+	{
+		// The result of the line trace
+		FHitResult Hit;
+
+		const FVector TraceStart = FirstPersonCameraComponent->GetComponentLocation();
+		const FVector TraceEnd = TraceStart + FirstPersonCameraComponent->GetForwardVector() * 10000.0;
+		
+		World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECollisionChannel::ECC_Visibility);
+		
+		TargetPosition = Hit.bBlockingHit ? Hit.ImpactPoint : Hit.TraceEnd;
+
+	}
+	return TargetPosition;
+}
+
+	
+
+
