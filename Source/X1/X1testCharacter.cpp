@@ -147,39 +147,62 @@ bool AX1testCharacter::IsToolAlreadyOwned(UEquippableToolDefinition* ToolDefinit
 
 void AX1testCharacter::AttachTool(UEquippableToolDefinition* ToolDefinition)
 {
-	// Only equip this tool if it isn't already owned
-	if (not IsToolAlreadyOwned(ToolDefinition))
+	if (!IsToolAlreadyOwned(ToolDefinition))
 	{
-		AEquippableToolBase* ToolToEquip = GetWorld()->SpawnActor<AEquippableToolBase>(ToolDefinition->ToolAsset, this->GetActorTransform());
-		
+		// 【修改】配置生成参数，必须指派 Owner
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		SpawnParams.Instigator = GetInstigator();
+
+		AEquippableToolBase* ToolToEquip = GetWorld()->SpawnActor<AEquippableToolBase>(
+			ToolDefinition->ToolAsset,
+			GetActorTransform(),
+			SpawnParams // 传入参数
+		);
+
+		if (!ToolToEquip) return; // 防护
+
 		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 
+		// 1. 武器 Actor 整体挂载到角色（维持生命周期和同步）
 		ToolToEquip->AttachToActor(this, AttachmentRules);
-		ToolToEquip->AttachToComponent(FirstPersonMeshComponent, AttachmentRules, FName(TEXT("HandGrip_R")));
-		ToolToEquip->AttachToComponent(GetMesh(), AttachmentRules, FName(TEXT("HandGrip_R")));
+
+		// 2. 将 1P 模型挂载到 1P 手臂
+		ToolToEquip->Mesh1P->AttachToComponent(
+			FirstPersonMeshComponent,
+			AttachmentRules,
+			FName(TEXT("HandGrip_R"))
+		);
+
+		// 3. 将 3P 模型挂载到 3P 身体
+		ToolToEquip->Mesh3P->AttachToComponent(
+			GetMesh(),
+			AttachmentRules,
+			FName(TEXT("HandGrip_R"))
+		);
 
 		ToolToEquip->OwningCharacter = this;
 
-
-
-
-		// Add the tool to this character's inventory
+		// 剩下的逻辑保持不变...
 		InventoryComponent->ToolInventory.Add(ToolDefinition);
 
-		// Set the animations on the first person mesh.
-		FirstPersonMeshComponent->SetAnimInstanceClass(ToolToEquip->FirstPersonToolAnim->GeneratedClass);
-		GetMesh()->SetAnimInstanceClass(ToolToEquip->ThirdPersonToolAnim->GeneratedClass);
+		if (ToolToEquip->FirstPersonToolAnim)
+		{
+			FirstPersonMeshComponent->SetAnimInstanceClass(ToolToEquip->FirstPersonToolAnim->GeneratedClass);
+		}
+		if (ToolToEquip->ThirdPersonToolAnim)
+		{
+			GetMesh()->SetAnimInstanceClass(ToolToEquip->ThirdPersonToolAnim->GeneratedClass);
+		}
 
 		EquippedTool = ToolToEquip;
 
-		// Get the player controller for this character
 		if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 		{
 			if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 			{
 				Subsystem->AddMappingContext(ToolToEquip->ToolMappingContext, 1);
 			}
-
 			ToolToEquip->BindInputAction(UseAction);
 		}
 	}

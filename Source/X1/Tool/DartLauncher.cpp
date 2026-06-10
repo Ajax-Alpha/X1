@@ -9,23 +9,32 @@
 
 void ADartLauncher::Use()
 {
+	// 增加安全检查
+	if (!OwningCharacter || !ProjectileClass) return;
+
 	GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, TEXT("Using the dart launcher!"));
+
 	UWorld* const World = GetWorld();
-	if (World != nullptr && ProjectileClass != nullptr)
+	if (World != nullptr)
 	{
 		FVector TargetPosition = OwningCharacter->GetCameraTargetLocation();
-		
-		FVector SocketLocation = ToolMeshComponent->GetSocketLocation("Muzzle");
+
+		// 【修改】从 Mesh1P 获取枪口位置，因为 1P 视角下子弹应从可见的枪管飞出
+		// 确保你在手枪模型的骨骼中添加了名为 "Muzzle" 的 Socket
+		FVector SocketLocation = Mesh1P->GetSocketLocation(FName("Muzzle"));
 		FRotator SpawnRotation = UKismetMathLibrary::FindLookAtRotation(SocketLocation, TargetPosition);
-		FVector SpawnLocation = SocketLocation + UKismetMathLibrary::GetForwardVector(SpawnRotation) * 10.0;
-		
+
+		// 稍微往前偏移一点，防止子弹生成时立刻碰撞到枪管
+		FVector SpawnLocation = SocketLocation + UKismetMathLibrary::GetForwardVector(SpawnRotation) * 10.0f;
+
 		FActorSpawnParameters ActorSpawnParams;
-        ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-		
+		// 这里的 Owner 设为 OwningCharacter
+		ActorSpawnParams.Owner = OwningCharacter;
+		ActorSpawnParams.Instigator = OwningCharacter->GetInstigator();
+		ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+
 		World->SpawnActor<AFirstPersonProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
-
 	}
-
 }
 
 	

@@ -51,6 +51,22 @@ public:
 	UFUNCTION()
 	virtual void BindInputAction(const UInputAction* ActionToBind);
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Visuals")
+	USkeletalMeshComponent* Mesh1P;
+
+	// 第三人称模型（其他人看到的，以及用来投射阴影的武器）
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Visuals")
+	USkeletalMeshComponent* Mesh3P;
+
+	// 动画资源引用（从你的代码结构来看，这些应该是 DataAsset 或类成员）
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TSubclassOf<UAnimInstance> FirstPersonAnimClass;
+
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TSubclassOf<UAnimInstance> ThirdPersonAnimClass;
+
+	
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

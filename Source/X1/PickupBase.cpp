@@ -67,28 +67,17 @@ void APickupBase::InitializePickup()
 
     // 5. 获取 ItemDefinition 对象指针
     UItemDefinition* TempItemDefinition = ItemDataRow->ItemBase.Get();
-
     if (!TempItemDefinition)
     {
-        // 如果 Get() 返回空，说明资源还没加载，尝试同步加载
-        UE_LOG(LogTemp, Warning, TEXT("ItemDefinition not loaded, loading synchronously for %s"), *PickupItemID.ToString());
         TempItemDefinition = ItemDataRow->ItemBase.LoadSynchronous();
     }
 
-    if (!TempItemDefinition)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load ItemDefinition for %s"), *PickupItemID.ToString());
-        return;
-    }
+    if (!TempItemDefinition) return;
 
-    // --- 此时数据都安全了，开始赋值 ---
-
-    // 6. 初始化 ReferenceItem (如果它是用于存储数据的副本)
-    if (!ReferenceItem)
-    {
-        ReferenceItem = TempItemDefinition->CreateItemCopy();
-
-    }
+    // 【关键优化】强制清空旧数据！
+    // 无论之前是不是 001，只要游戏开始或重生，都强制用当前的 ID 重新生成一份数据
+    ReferenceItem = nullptr;
+    ReferenceItem = TempItemDefinition->CreateItemCopy();
 
   
 
@@ -147,31 +136,65 @@ void APickupBase::OnSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent,
 
     if (bShouldRespawn)
     {
-        GetWorldTimerManager().SetTimer(RespawnTimerHandle, this, &APickupBase::InitializePickup, RespawnTime, false, 0);
+        
+        GetWorldTimerManager().SetTimer(RespawnTimerHandle, this, &APickupBase::InitializePickup, RespawnTime, false, 4.0f);
     }
 }
 
 void APickupBase::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-    // Handle parent class property changes
     Super::PostEditChangeProperty(PropertyChangedEvent);
 
-    // If a property was changed, get the name of the changed property. Otherwise use none.
     const FName ChangedPropertyName = PropertyChangedEvent.Property ? PropertyChangedEvent.Property->GetFName() : NAME_None;
 
-    // Verify that the changed property exists in this class and that the PickupDataTable is valid.
+    // 只有当 PickupItemID 改变时才执行
     if (ChangedPropertyName == GET_MEMBER_NAME_CHECKED(APickupBase, PickupItemID) && PickupDataTable)
     {
-        // Retrieve the associated ItemData for this pickup.
-        if (const FItemData* ItemDataRow = PickupDataTable->FindRow<FItemData>(PickupItemID, PickupItemID.ToString()))
+        // 1. 查找新数据
+        const FItemData* ItemDataRow = PickupDataTable->FindRow<FItemData>(PickupItemID, TEXT("PostEditChange"));
+
+        if (ItemDataRow && ItemDataRow->ItemBase.IsValid())
         {
-            UItemDefinition* TempItemDefinition = ItemDataRow->ItemBase.Get();
+            UItemDefinition* NewItemDef = ItemDataRow->ItemBase.Get();
 
-            // Set the pickup's mesh to the associated item's mesh
-            PickupMeshComponent->SetStaticMesh(TempItemDefinition->WorldMesh.Get());
+            // 如果没有加载，强制同步加载（防止编辑器里显示不出来）
+            if (!NewItemDef)
+            {
+                NewItemDef = ItemDataRow->ItemBase.LoadSynchronous();
+            }
 
-            // Set the sphere's collision radius
-            SphereComponent->SetSphereRadius(32.f);
+            if (NewItemDef)
+            {
+                // 2. 更新网格体 (Visuals)
+                if (PickupMeshComponent && NewItemDef->WorldMesh.IsValid())
+                {
+                    UStaticMesh* NewMesh = NewItemDef->WorldMesh.Get();
+                    if (!NewMesh) NewMesh = NewItemDef->WorldMesh.LoadSynchronous();
+                    PickupMeshComponent->SetStaticMesh(NewMesh);
+                }
+
+                // 3. 【关键修复】更新内在数据 (Logic Data)
+                // 之前的代码只换了皮，没换 ReferenceItem，导致捡起来还是旧东西，或者逻辑错乱
+                if (NewItemDef)
+                {
+                    ReferenceItem = NewItemDef->CreateItemCopy();
+                }
+
+                // 4. 【关键修复】重新绑定碰撞事件
+                // 防止因为编辑器操作导致 Delegate 丢失
+                if (SphereComponent)
+                {
+                    // 先移除旧的，防止重复绑定
+                    SphereComponent->OnComponentBeginOverlap.RemoveAll(this);
+                    SphereComponent->OnComponentBeginOverlap.AddDynamic(this, &APickupBase::OnSphereBeginOverlap);
+                }
+
+                UE_LOG(LogTemp, Warning, TEXT("Editor Update: Switched to %s successfully."), *PickupItemID.ToString());
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Editor Update Failed: Could not find data for %s"), *PickupItemID.ToString());
         }
     }
 }
