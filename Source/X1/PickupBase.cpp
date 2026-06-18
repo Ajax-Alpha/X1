@@ -4,197 +4,138 @@
 #include "PickupBase.h"
 #include "ItemDefinition.h"
 #include "X1testCharacter.h"
+#include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "TimerManager.h"
 
-// Sets default values
 APickupBase::APickupBase()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bCanEverTick = false; // 拾取物通常不需要 Tick 以节省性能
 
     PickupMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PickupMesh"));
-    check(PickupMeshComponent != nullptr);
+    RootComponent = PickupMeshComponent; // 将 Mesh 设为根组件
 
-	SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComponent"));
-	check(SphereComponent != nullptr);
-
-	SphereComponent->SetupAttachment(PickupMeshComponent);
-	
-	SphereComponent->SetSphereRadius(32.f);
+    SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComponent"));
+    SphereComponent->SetupAttachment(RootComponent);
+    SphereComponent->SetSphereRadius(32.f);
 }
 
-// Called when the game starts or when spawned
 void APickupBase::BeginPlay()
 {
-	Super::BeginPlay();
-	
-	InitializePickup();
-}
+    Super::BeginPlay();
 
-// Called every frame
-void APickupBase::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
+    // 【关键修复】在此处仅绑定一次事件。
+    // 不要放在 InitializePickup 中，否则每次重生都会重复绑定。
+    if (SphereComponent)
+    {
+        SphereComponent->OnComponentBeginOverlap.AddDynamic(this, &APickupBase::OnSphereBeginOverlap);
+    }
 
+    InitializePickup();
 }
 
 void APickupBase::InitializePickup()
-
-
 {
-    // 1. 基础检查：确保数据表和ID有效
-    if (!PickupDataTable || PickupItemID.IsNone())
+    // 1. 检查数据表有效性
+    if (!PickupDataTable.IsValid() || PickupItemID.IsNone())
     {
-        UE_LOG(LogTemp, Warning, TEXT("InitializePickup Failed: DataTable is null or ID is None."));
+        UE_LOG(LogTemp, Warning, TEXT("[%s] 初始化失败: 数据表未分配或 ID 为空。"), *GetName());
         return;
     }
+
+    UDataTable* Table = PickupDataTable.LoadSynchronous();
+    if (!Table) return;
 
     // 2. 查找数据行
-    const FItemData* ItemDataRow = PickupDataTable->FindRow<FItemData>(PickupItemID, PickupItemID.ToString());
-
-    // 3. 检查行是否找到（这是最常见的崩溃点）
+    const FItemData* ItemDataRow = Table->FindRow<FItemData>(PickupItemID, PickupItemID.ToString());
     if (!ItemDataRow)
     {
-        UE_LOG(LogTemp, Error, TEXT("InitializePickup Failed: Row '%s' not found in DataTable!"), *PickupItemID.ToString());
+        UE_LOG(LogTemp, Error, TEXT("[%s] 找不到 ID 为 '%s' 的数据行。"), *GetName(), *PickupItemID.ToString());
         return;
     }
 
-    // 4. 检查 ItemBase 软引用是否有效（数据表里有没有填）
-    if (!ItemDataRow->ItemBase.IsValid())
-    {
-        UE_LOG(LogTemp, Error, TEXT("InitializePickup Failed: ItemBase is null in Row '%s'. Check your DataTable!"), *PickupItemID.ToString());
-        return;
-    }
-
-    // 5. 获取 ItemDefinition 对象指针
-    UItemDefinition* TempItemDefinition = ItemDataRow->ItemBase.Get();
+    // 3. 【核心修复】使用 LoadSynchronous() 确保发射器等独立资源被强制加载。
+    // 这解决了 .Get() 在资源未预加载时返回 null 导致重现失败的问题。
+    UItemDefinition* TempItemDefinition = ItemDataRow->ItemBase.LoadSynchronous();
     if (!TempItemDefinition)
     {
-        TempItemDefinition = ItemDataRow->ItemBase.LoadSynchronous();
+        UE_LOG(LogTemp, Error, TEXT("[%s] 无法加载 ItemDefinition。"), *GetName());
+        return;
     }
 
-    if (!TempItemDefinition) return;
-
-    // 【关键优化】强制清空旧数据！
-    // 无论之前是不是 001，只要游戏开始或重生，都强制用当前的 ID 重新生成一份数据
-    ReferenceItem = nullptr;
+    // 4. 更新逻辑数据引用
     ReferenceItem = TempItemDefinition->CreateItemCopy();
 
-  
-
-    // 7. 处理 Mesh 显示
-    UStaticMesh* MeshToUse = nullptr;
-
-    // 检查 WorldMesh 软引用是否有效
-    if (TempItemDefinition->WorldMesh.IsValid())
-    {
-        MeshToUse = TempItemDefinition->WorldMesh.Get();
-    }
-    else
-    {
-        // 如果 Mesh 没加载，同步加载它
-        UE_LOG(LogTemp, Warning, TEXT("WorldMesh not loaded, loading synchronously."));
-        MeshToUse = TempItemDefinition->WorldMesh.LoadSynchronous();
-    }
-
-    // 8. 最终应用到组件
+    // 5. 更新并恢复显示状态
+    UStaticMesh* MeshToUse = TempItemDefinition->WorldMesh.LoadSynchronous();
     if (PickupMeshComponent && MeshToUse)
     {
         PickupMeshComponent->SetStaticMesh(MeshToUse);
         PickupMeshComponent->SetVisibility(true);
         PickupMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Mesh is null or Component is null!"));
-        // 即使Mesh为空，也要确保组件状态正确，或者隐藏Actor
-        if (PickupMeshComponent) PickupMeshComponent->SetVisibility(false);
-    }
 
-    // 9. 激活碰撞
+    // 6. 重新激活触发器碰撞
     if (SphereComponent)
     {
         SphereComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-        SphereComponent->OnComponentBeginOverlap.AddDynamic(this, &APickupBase::OnSphereBeginOverlap);
     }
+
+    UE_LOG(LogTemp, Log, TEXT("%s Item respawned and ready."), *GetName());
 }
 
 void APickupBase::OnSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-    GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, TEXT("Attempting a pickup collision"));
     AX1testCharacter* Character = Cast<AX1testCharacter>(OtherActor);
 
     if (Character != nullptr)
     {
+        // 1. 执行拾取逻辑（给玩家物品）
         Character->GiveItem(ReferenceItem);
 
-        SphereComponent->OnComponentBeginOverlap.RemoveAll(this);
+        // 2. 隐藏并禁用碰撞，防止在 4 秒重现期内再次触发
+        if (PickupMeshComponent)
+        {
+            PickupMeshComponent->SetVisibility(false);
+            PickupMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        }
 
-        PickupMeshComponent->SetVisibility(false);
-        PickupMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        SphereComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    }
+        if (SphereComponent)
+        {
+            SphereComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        }
 
-    if (bShouldRespawn)
-    {
-        
-        GetWorldTimerManager().SetTimer(RespawnTimerHandle, this, &APickupBase::InitializePickup, RespawnTime, false, 4.0f);
+        // 3. 启动重生计时器
+        if (bShouldRespawn)
+        {
+            // 按要求保留 4.0f 初始延迟参数
+            GetWorldTimerManager().SetTimer(
+                RespawnTimerHandle,
+                this,
+                &APickupBase::InitializePickup,
+                RespawnTime,
+                false,
+                4.0f
+            );
+        }
     }
 }
 
+void APickupBase::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+}
+
+#if WITH_EDITOR
 void APickupBase::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
     Super::PostEditChangeProperty(PropertyChangedEvent);
-
     const FName ChangedPropertyName = PropertyChangedEvent.Property ? PropertyChangedEvent.Property->GetFName() : NAME_None;
 
-    // 只有当 PickupItemID 改变时才执行
-    if (ChangedPropertyName == GET_MEMBER_NAME_CHECKED(APickupBase, PickupItemID) && PickupDataTable)
+    if (ChangedPropertyName == GET_MEMBER_NAME_CHECKED(APickupBase, PickupItemID))
     {
-        // 1. 查找新数据
-        const FItemData* ItemDataRow = PickupDataTable->FindRow<FItemData>(PickupItemID, TEXT("PostEditChange"));
-
-        if (ItemDataRow && ItemDataRow->ItemBase.IsValid())
-        {
-            UItemDefinition* NewItemDef = ItemDataRow->ItemBase.Get();
-
-            // 如果没有加载，强制同步加载（防止编辑器里显示不出来）
-            if (!NewItemDef)
-            {
-                NewItemDef = ItemDataRow->ItemBase.LoadSynchronous();
-            }
-
-            if (NewItemDef)
-            {
-                // 2. 更新网格体 (Visuals)
-                if (PickupMeshComponent && NewItemDef->WorldMesh.IsValid())
-                {
-                    UStaticMesh* NewMesh = NewItemDef->WorldMesh.Get();
-                    if (!NewMesh) NewMesh = NewItemDef->WorldMesh.LoadSynchronous();
-                    PickupMeshComponent->SetStaticMesh(NewMesh);
-                }
-
-                // 3. 【关键修复】更新内在数据 (Logic Data)
-                // 之前的代码只换了皮，没换 ReferenceItem，导致捡起来还是旧东西，或者逻辑错乱
-                if (NewItemDef)
-                {
-                    ReferenceItem = NewItemDef->CreateItemCopy();
-                }
-
-                // 4. 【关键修复】重新绑定碰撞事件
-                // 防止因为编辑器操作导致 Delegate 丢失
-                if (SphereComponent)
-                {
-                    // 先移除旧的，防止重复绑定
-                    SphereComponent->OnComponentBeginOverlap.RemoveAll(this);
-                    SphereComponent->OnComponentBeginOverlap.AddDynamic(this, &APickupBase::OnSphereBeginOverlap);
-                }
-
-                UE_LOG(LogTemp, Warning, TEXT("Editor Update: Switched to %s successfully."), *PickupItemID.ToString());
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Editor Update Failed: Could not find data for %s"), *PickupItemID.ToString());
-        }
+        // 编辑器下实时预览更新
+        InitializePickup();
     }
 }
+#endif

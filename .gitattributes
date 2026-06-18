@@ -1,3 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+Gaming[[:space:]]Video[[:space:]]&[[:space:]]Package.zip filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
 *.ucas filter=lfs diff=lfs merge=lfs -text
