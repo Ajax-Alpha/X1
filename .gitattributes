@@ -2,4 +2,18 @@
 * text=auto
 Gaming[[:space:]]Video[[:space:]]&[[:space:]]Package.zip filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
+Binaries filter=lfs diff=lfs merge=lfs -text
+Config filter=lfs diff=lfs merge=lfs -text
+Intermediate filter=lfs diff=lfs merge=lfs -text
+Saved filter=lfs diff=lfs merge=lfs -text
+Source filter=lfs diff=lfs merge=lfs -text
+Windows(Package) filter=lfs diff=lfs merge=lfs -text
+X1.gitignore filter=lfs diff=lfs merge=lfs -text
+X1.sln filter=lfs diff=lfs merge=lfs -text
+Build filter=lfs diff=lfs merge=lfs -text
+Content filter=lfs diff=lfs merge=lfs -text
+DerivedDataCache filter=lfs diff=lfs merge=lfs -text
+Gaming[[:space:]]Video[[:space:]].mp4 filter=lfs diff=lfs merge=lfs -text
+Gaming[[:space:]]Video[[:space:]]and[[:space:]]Package[[:space:]].zip filter=lfs diff=lfs merge=lfs -text
+X1.uproject filter=lfs diff=lfs merge=lfs -text
 *.ucas filter=lfs diff=lfs merge=lfs -text

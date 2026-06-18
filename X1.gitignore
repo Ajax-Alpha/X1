@@ -1,15 +1,3 @@
-# UE构建/派生数据
-Binaries/
-DerivedDataCache/
-Intermediate/
-Saved/
-.vs/
-.vscode/
-
-# 平台特定文件
-*.pdb
-*.dSYM/
-
-# 用户/操作系统缓存文件
-.DS_Store
-Thumbs.db
+version https://git-lfs.github.com/spec/v1
+oid sha256:5b0dbf564b446461ec8ff545ebc56a24018cbb3ff1a83aceadcf7c39d92306b3
+size 191
